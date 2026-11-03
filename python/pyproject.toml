@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sanadamaru"
+version = "0.1.0"
+description = "真田丸：AI が休まず探しに来る「よくある穴」に偽の扉を置き、触れた相手を確かめる守りの部品（反撃しない・依存なし）"
+readme = "README.md"
+# ライセンスの写し（LICENSE・NOTICE）は、リポジトリのいちばん上のものを python/ に写して部品に入れる（CI が食い違いを落とす）
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["honeypot", "security", "asgi", "wsgi", "fastapi", "flask", "deception"]
+classifiers = [
+    "Framework :: FastAPI",
+    "Framework :: Flask",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP :: WSGI :: Middleware",
+]
+
+[project.urls]
+Homepage = "https://github.com/mamorune-com/sanadamaru"
+Security = "https://github.com/mamorune-com/sanadamaru/security/policy"
+
+[tool.setuptools]
+packages = ["sanadamaru"]

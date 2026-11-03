@@ -1,0 +1,25 @@
+name: 第2段（兵糧攻め）の案
+description: 扉に触れた相手だけを迷路へ案内する「兵糧攻め」の設計の提案
+title: "[第2段] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先に [docs/stage2.md](https://github.com/mamorune-com/sanadamaru/blob/main/docs/stage2.md) の条件と論点を読んでください。コードの Pull Request は、設計が決まってからお願いします。実在のサービスを狙う手口そのものは、書かないでください。
+  - type: textarea
+    id: idea
+    attributes:
+      label: 案
+    validations:
+      required: true
+  - type: textarea
+    id: conditions
+    attributes:
+      label: 条件の1〜6を、どう満たすか
+      description: とくに「相手の機械で何も動かさない」と「自分の側の負担の上限」について書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: measure
+    attributes:
+      label: 効き目の測り方
