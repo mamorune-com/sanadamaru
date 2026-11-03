@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 抜け道を見つけた（セキュリティの問題）
+    url: https://github.com/mamorune-com/sanadamaru/security/policy
+    about: 公開の Issue には書かず、SECURITY.md の方法で、非公開でお知らせください。

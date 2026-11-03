@@ -1,0 +1,18 @@
+name: release-check
+# 版（v0.1.0 など）を付けたら、外の開発者と同じやり方で「URL から入れて動くか」を確かめる。
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  python-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.13" }
+      - name: pip で URL から入れて動かす
+        run: |
+          pip install "git+https://github.com/${GITHUB_REPOSITORY}@${GITHUB_REF_NAME}#subdirectory=python"
+          python -m sanadamaru demo
+          python -c "import sanadamaru, sys; print(sanadamaru.__version__); sys.exit(sanadamaru.__version__ != '${GITHUB_REF_NAME#v}')"

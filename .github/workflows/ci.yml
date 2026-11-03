@@ -1,0 +1,31 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "${{ matrix.python-version }}" }
+      - run: cmp LICENSE python/LICENSE && cmp NOTICE python/NOTICE   # Python の部品に入れるライセンスの写しが、元と同じか
+      - run: pip install pytest && cd python && python -m pytest -q
+      # 外の開発者と同じく「部品として入れて」動くか（コマンドも）
+      - run: |
+          pip install ./python
+          cd "$RUNNER_TEMP"
+          python -m sanadamaru demo
+          python -c "import sanadamaru, sys; c = sanadamaru.Castle(secret='ci-secret-0123456789'); sys.exit(c.check(path='/.env', headers={}, peer='5.6.7.8') is None)"
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.13" }
+      # README と examples/ の書き方が、FastAPI と Flask で本当に動くか
+      - run: pip install ./python fastapi httpx flask
+      - run: for f in examples/*.py; do echo "$f"; python "$f" || exit 1; done
