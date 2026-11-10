@@ -49,13 +49,22 @@ def parse(value: Optional[str]) -> Optional[_Address]:
 
 
 def networks(values: Iterable[str]) -> Tuple[_Network, ...]:
-    """`10.0.0.0/8` のような範囲の一覧を読む。読めない範囲があれば ValueError（まちがった設定では動かさない）。"""
+    """`10.0.0.0/8` のような範囲の一覧を読む。読めない範囲があれば ValueError（まちがった設定では動かさない）。
+
+    `::ffff:1.2.3.0/120` のような「IPv6 の形で書いた IPv4 の範囲」は、IPv4 の範囲（`1.2.3.0/24`）にも直して持ちます。
+    番号の方は parse() が `::ffff:1.2.3.4` を `1.2.3.4` に直すので、範囲も同じ形にしないと一致しません。
+    """
     out = []
     for v in values:
         try:
-            out.append(ipaddress.ip_network(str(v).strip(), strict=False))
+            n = ipaddress.ip_network(str(v).strip(), strict=False)
         except ValueError:
             raise ValueError(f"番号の範囲として読めません：{v!r}") from None
+        out.append(n)
+        if isinstance(n, ipaddress.IPv6Network) and n.prefixlen >= 96:
+            mapped = n.network_address.ipv4_mapped
+            if mapped is not None:
+                out.append(ipaddress.ip_network(f"{mapped}/{n.prefixlen - 96}", strict=False))
     return tuple(out)
 
 

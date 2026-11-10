@@ -59,7 +59,7 @@ AI を使った攻撃は、人よりずっと多くの住所を、休まず試�
 ### 入れる
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.0#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
 python -m sanadamaru demo
 ```
 
@@ -165,7 +165,7 @@ Apache-2.0 です。商用でも、無料で使えます。
 It never touches the attacker's systems: no hack-back, nothing that runs on the visitor's machine, no real secrets, and no look-alikes of other companies' key formats. See [docs/lines.md](docs/lines.md) (Japanese).
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.0#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
 python -m sanadamaru demo
 ```
 

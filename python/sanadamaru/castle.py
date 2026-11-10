@@ -78,16 +78,24 @@ def _clean(value: object, limit: int) -> str:
 
 
 def _from_web_page(headers: Mapping[str, str]) -> bool:
-    """よそのページ（や自分のページ）に埋め込まれた読み込み・リンクから来た問い合わせか。
+    """よそのページ（や自分のページ）に埋め込まれた読み込み・リンクから来た「かもしれない」問い合わせか。
 
     ブラウザは、画像・スクリプト・リンクの読み込みに `Sec-Fetch-Site`（cross-site・same-site・same-origin）を付けます。
     アドレス欄に打ち込んだ時だけ `none` です。古いブラウザは `Sec-Fetch-*` を送らないので、`Referer`・`Origin` も見ます。
-    これらがある時は、閲覧者本人ではなく、ページを書いた誰かが読み込ませた可能性があるので、締め出しません。
+
+    ただし、http:// の住所への読み込みには `Sec-Fetch-*` が付かず、ページが `referrerpolicy="no-referrer"` を
+    指定すれば `Referer` も付きません。そこで、印が1つも無くても、ブラウザの名乗り（`Mozilla/…`）なら、
+    ページからの読み込みでないとは言い切れないので、締め出しません。名乗りを偽る道具は締め出しを逃れますが、
+    記録には残ります。無関係な閲覧者を巻き込まない側を選んでいます（docs/lines.md の 5）。
     """
     site = (headers.get("sec-fetch-site") or "").strip().lower()
     if site and site != "none":
         return True
-    return bool(headers.get("referer") or headers.get("origin"))
+    if headers.get("referer") or headers.get("origin"):
+        return True
+    if site == "none":
+        return False                     # アドレス欄に打ち込んだ・ブックマーク（ページからは作れない）
+    return (headers.get("user-agent") or "").lstrip().lower().startswith("mozilla/")
 
 
 def _norm(path: str) -> str:
