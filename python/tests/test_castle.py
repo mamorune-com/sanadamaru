@@ -283,6 +283,16 @@ def test_addresses_with_decorations_are_not_read(value):
     assert e["ip"] == "" and "\t" not in str(e)
 
 
+@pytest.mark.parametrize("proxies", [["::ffff:1.2.3.0/120"], ["1.2.3.0/24"]])
+def test_ipv4_mapped_proxy_ranges_match_ipv4_peers(proxies):
+    # 直接の相手 ::ffff:1.2.3.4 は 1.2.3.4 として読む。範囲を IPv6 の形で書いても、同じように一致させる
+    c = make(ban=True, client_ip="x-forwarded-for", trusted_proxies=proxies)
+    ask(c, "/.env", headers={"x-forwarded-for": PROBER}, peer="::ffff:1.2.3.4")
+    assert c.report()["recent"][0]["ip"] == PROBER
+    assert ask(c, "/", headers={"x-forwarded-for": NEIGHBOR}, peer="::ffff:1.2.3.4", now=1001.0) is None
+    assert ask(c, "/", headers={"x-forwarded-for": PROBER}, peer="::ffff:1.2.3.4", now=1001.0) == FORBIDDEN
+
+
 def test_bad_trusted_proxies_refuse_to_start():
     with pytest.raises(ValueError):
         make(trusted_proxies=["not-a-network"])
@@ -315,9 +325,26 @@ def test_bait_key_loaded_by_a_web_page_does_not_ban_the_viewer():
     assert ask(c, "/", now=1001.0) is None
 
 
+def test_browser_without_any_page_signal_is_not_banned():
+    # http:// への埋め込み＋ referrerpolicy="no-referrer" では、Sec-Fetch-*・Referer・Origin のどれも届かない
+    c = make(ban=True)
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+    assert ask(c, "/.env", headers={"user-agent": ua, "accept": "image/avif,image/webp,*/*"}).status == 200
+    e = c.report()["recent"][0]
+    assert e["from_page"] is True and e["banned"] is False
+    assert ask(c, "/", now=1001.0) is None
+
+
+@pytest.mark.parametrize("ua", ["", "curl/8.4.0", "python-requests/2.32", "Go-http-client/1.1"])
+def test_tools_without_page_signals_are_still_banned(ua):
+    c = make(ban=True)
+    ask(c, "/.env", headers={"user-agent": ua} if ua else {})
+    assert c.report()["recent"][0]["banned"] is True
+
+
 def test_typed_address_still_bans():
     c = make(ban=True)
-    ask(c, "/.env", headers={"sec-fetch-site": "none", "sec-fetch-mode": "navigate"})
+    ask(c, "/.env", headers={"sec-fetch-site": "none", "sec-fetch-mode": "navigate", "user-agent": "Mozilla/5.0"})
     assert c.report()["recent"][0]["banned"] is True
     assert ask(c, "/", now=1001.0) == FORBIDDEN
 

@@ -39,7 +39,7 @@
 | `cloudflare` | `CF-Connecting-IP`（Cloudflare が上書きします） | Cloudflare だけが前に立つ時 |
 | `x-forwarded-for` | `X-Forwarded-For` の右から `trusted_hops` 番目 | ロードバランサーなどが前に立つ時（Cloudflare の後ろにロードバランサーがある時も） |
 
-- 見出しを読むのは、直接つないできた相手が前に立つ仕組みだと確かめられた時だけです。`cloudflare` は Cloudflare の番号、`x-forwarded-for` は `trusted_proxies` の範囲（指定が無ければ、公開されていない番号）です。それ以外の相手からの見出しは無視して、その相手自身の番号を使います。
+- 見出しを読むのは、直接つないできた相手が前に立つ仕組みだと確かめられた時だけです。`cloudflare` は Cloudflare の番号、`x-forwarded-for` は `trusted_proxies` の範囲（指定が無ければ、公開されていない番号）です。`::ffff:1.2.3.0/120` のような IPv6 の形の IPv4 の範囲も、IPv4 の範囲（`1.2.3.0/24`）として比べます。それ以外の相手からの見出しは無視して、その相手自身の番号を使います。
 - `trusted_hops` が2以上の時は、間にはさまる番号も前に立つ仕組み（`trusted_proxies`・Cloudflare・指定が無ければ公開されていない番号）かを確かめます。
 - 前に立つ仕組みから届いたのに見出しが読めない・段数が足りない時は、空にします（締め出しません。最初の1回だけ WARNING を出します）。
 - `%` などの飾りや、番号に使わない文字が混ざった値は、番号として読みません。
@@ -50,7 +50,7 @@
 - 期限があります（既定は24時間）。期限が来たら、自動で解けます。
 - 締め出しておける番号の数に、上限があります（既定は1万）。番号を変えて大量に来ても、メモリを食いつぶしません。
 - 締め出さない番号：Cloudflare 自身の番号・公開されていない番号（社内・家庭内・CGNAT・ループバック・説明用の番号など）・読めない番号。
-- ページからの読み込みは締め出しません：`Sec-Fetch-Site` が `none` 以外（cross-site・same-site・same-origin）か、`Referer`・`Origin` がある時です。記録には `from_page` として残ります。
+- ページからの読み込みは締め出しません：`Sec-Fetch-Site` が `none` 以外（cross-site・same-site・same-origin）か、`Referer`・`Origin` がある時、またはどの印も無く UA がブラウザの名乗り（`Mozilla/…`）の時です（http:// の住所や `referrerpolicy="no-referrer"` では印が消えるため）。`Sec-Fetch-Site: none`（アドレス欄に打ち込んだ）の時は締め出します。記録には `from_page` として残ります。
 
 ## 記録と知らせ
 
