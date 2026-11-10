@@ -78,9 +78,13 @@ castle = Castle.from_env(alert=log_alert)   # ERROR の記録として出す。S
 | 前に立つもの | `SANADAMARU_CLIENT_IP` | `SANADAMARU_TRUSTED_HOPS` |
 |---|---|---|
 | 何も無い | `direct` | |
-| Cloudflare（Render など、Cloudflare を通らないと届かない構成） | `cloudflare` | |
+| Cloudflare だけ（直接の相手が Cloudflare の番号） | `cloudflare` | |
 | `X-Forwarded-For` の右端に相手の番号を足す仕組みが1つ | `x-forwarded-for` | `1` |
-| 同じような仕組みが2つ（例：CDN の後ろにロードバランサー） | `x-forwarded-for` | `2` |
+| 同じような仕組みが2つ（例：Cloudflare の後ろにロードバランサー。Render など） | `x-forwarded-for` | `2` |
+
+- 転送の見出しは、直接の相手が前に立つ仕組みの時だけ読みます。`x-forwarded-for` では、公開されていない番号（同じ建物の中のロードバランサーなど）を前に立つ仕組みとみなします。公開されている番号のロードバランサーや CDN の後ろでは、`SANADAMARU_TRUSTED_PROXIES` にその範囲を書いてください。
+- Cloudflare の後ろにロードバランサーがある構成で `cloudflare` を選ぶと、直接の相手がロードバランサーになるので、見出しを読みません（`ip` がロードバランサーの番号になり、締め出しません）。`x-forwarded-for` の `2` を選んでください。
+- 段数がまちがっていると、`ip` が空になります（締め出しません）。3. の確かめで気づけます。
 
 **オンにした後は、ご自身で扉を試さないでください。** 自分の回線も締め出されます（既定は24時間）。解く時は、アプリを再起動します（締め出しはメモリにあるため）。
 

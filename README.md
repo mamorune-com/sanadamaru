@@ -59,7 +59,7 @@ AI を使った攻撃は、人よりずっと多くの住所を、休まず試�
 ### 入れる
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.1.0#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.0#subdirectory=python"
 python -m sanadamaru demo
 ```
 
@@ -99,6 +99,8 @@ Django は [docs/deploy.md](docs/deploy.md) にあります。動く例は [exam
 | `SANADAMARU_BAN_SECONDS` | `86400` | 締め出しの長さ（秒）。 |
 | `SANADAMARU_CLIENT_IP` | `direct` | 送り元の読み方（`direct`・`cloudflare`・`x-forwarded-for`）。 |
 | `SANADAMARU_TRUSTED_HOPS` | `1` | `x-forwarded-for` の時の、前に立つ仕組みの数。 |
+| `SANADAMARU_TRUSTED_PROXIES` | | 前に立つ仕組みの番号の範囲（カンマ区切り。例：`10.0.0.0/8`）。この範囲から届いた時だけ、転送の見出しを読みます。 |
+| `SANADAMARU_LOG_PER_MINUTE` | `60` | 記録の行（WARNING）を1分に出す上限。超えた分は数えて、次の行に添えます。 |
 | `SANADAMARU_NEVER_BLOCK` | | 締め出し中でも止めない住所（カンマ区切り。`/health` は常に入ります）。 |
 | `SANADAMARU_KEY_PREFIX` | `app_live_` | 偽の鍵の書き出し。自分のサービスの鍵に似せてください（他社の鍵の形は使えません）。 |
 
@@ -114,11 +116,12 @@ Django は [docs/deploy.md](docs/deploy.md) にあります。動く例は [exam
 
 締め出しで、いちばん避けたいのは、無関係な人を締め出すことです。オンにする前に、[docs/deploy.md](docs/deploy.md) の手順で、送り元の番号が正しく読めているかを確かめてください。
 
-- Cloudflare の後ろ（Render など）では `SANADAMARU_CLIENT_IP=cloudflare`
+- Cloudflare だけが前に立つなら `SANADAMARU_CLIENT_IP=cloudflare`
 - 前に立つ仕組みが1つなら `x-forwarded-for`（`SANADAMARU_TRUSTED_HOPS=1`）
+- Cloudflare の後ろにロードバランサー（Render など）なら `x-forwarded-for`（`SANADAMARU_TRUSTED_HOPS=2`）
 - 何も前に立っていなければ `direct`
 
-念のため、Cloudflare 自身の番号と、公開されていない番号（社内・ロードバランサーなど）は、どの読み方でも締め出しません。
+念のため、Cloudflare 自身の番号と、公開されていない番号（社内・ロードバランサーなど）は、どの読み方でも締め出しません。転送の見出し（`CF-Connecting-IP`・`X-Forwarded-For`）は、前に立つ仕組みから届いた時だけ読みます。よそのページに埋め込まれた読み込み（`<img src=".../.env">` など）で開かれた時は、閲覧者本人の操作とは限らないので、記録だけして締め出しません。
 
 ## 第2段（兵糧攻め）を、一緒に考えてくれる人を探しています
 
@@ -157,12 +160,12 @@ Apache-2.0 です。商用でも、無料で使えます。
 - Decoy doors return plausible, entirely fake content.
 - Each door embeds marked bait keys (one per door and field). If a bait key is later presented (Authorization, X-API-Key, query string, …), the request is refused and you learn which door and field it was taken from.
 - Records keep only the time, door, marker, source address and a short user agent, in memory with hard caps. Alerts are rate-limited per door.
-- Blocking is **off by default**. When enabled, it blocks the source for a while (24h by default). It never blocks your health or emergency endpoints, and never blocks Cloudflare's own addresses or non-public addresses.
+- Blocking is **off by default**. When enabled, it blocks the source for a while (24h by default). It never blocks your health or emergency endpoints, never blocks Cloudflare's own addresses or non-public addresses, only reads forwarding headers from a trusted proxy, and does not block requests made by a web page (for example an embedded image), since the visitor may not have chosen to make them.
 
 It never touches the attacker's systems: no hack-back, nothing that runs on the visitor's machine, no real secrets, and no look-alikes of other companies' key formats. See [docs/lines.md](docs/lines.md) (Japanese).
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.1.0#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.0#subdirectory=python"
 python -m sanadamaru demo
 ```
 

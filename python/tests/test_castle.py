@@ -233,6 +233,95 @@ def test_forwarded_for_mode_with_two_proxies():
     assert c.report()["recent"][0]["ip"] == PROBER
 
 
+def test_cloudflare_header_is_ignored_when_not_from_cloudflare():
+    # Cloudflare を通らずに直接届いた相手が CF-Connecting-IP を書いても、隣の人を締め出させない
+    c = make(ban=True, client_ip="cloudflare")
+    ask(c, "/.env", headers={"cf-connecting-ip": NEIGHBOR}, peer=PROBER)
+    assert c.report()["recent"][0]["ip"] == PROBER
+    assert ask(c, "/", peer=NEIGHBOR, now=1001.0) is None
+    assert ask(c, "/", peer=PROBER, now=1001.0) == FORBIDDEN
+
+
+def test_cloudflare_header_through_a_listed_proxy():
+    c = make(ban=True, client_ip="cloudflare", trusted_proxies=["10.0.0.0/8"])
+    ask(c, "/.env", headers={"cf-connecting-ip": PROBER}, peer="10.0.0.2")
+    assert c.report()["recent"][0]["ip"] == PROBER
+
+
+def test_forwarded_for_header_is_ignored_from_a_public_peer():
+    # 前に立つ仕組みを通らずに直接届いた相手が X-Forwarded-For を書いても、隣の人を締め出させない
+    c = make(ban=True, client_ip="x-forwarded-for")
+    ask(c, "/.env", headers={"x-forwarded-for": NEIGHBOR}, peer=PROBER)
+    assert c.report()["recent"][0]["ip"] == PROBER
+    assert ask(c, "/", peer=NEIGHBOR, now=1001.0) is None
+
+
+def test_forwarded_for_with_listed_proxies_only_trusts_them():
+    c = make(ban=True, client_ip="x-forwarded-for", trusted_proxies=["203.0.113.0/24"])
+    ask(c, "/.env", headers={"x-forwarded-for": NEIGHBOR}, peer="10.0.0.2")    # 一覧に無い相手
+    assert c.report()["recent"][0]["ip"] == "10.0.0.2" and c.report()["recent"][0]["banned"] is False
+    ask(c, "/.env", headers={"x-forwarded-for": PROBER}, peer="203.0.113.5", now=1001.0)
+    assert c.report()["recent"][0]["ip"] == PROBER
+
+
+def test_forwarded_for_with_too_many_hops_does_not_read_the_left_side(caplog):
+    # trusted_hops=2 なのに、本当は前に立つ仕組みが1つ：左（呼び手が書いた所）を読まず、締め出さない
+    c = make(ban=True, client_ip="x-forwarded-for", trusted_hops=2)
+    with caplog.at_level(logging.WARNING, logger="sanadamaru"):
+        ask(c, "/.env", headers={"x-forwarded-for": f"{NEIGHBOR}, {PROBER}"}, peer="10.0.0.2")
+        ask(c, "/.env", headers={"x-forwarded-for": PROBER}, peer="10.0.0.2", now=1001.0)
+    assert [e["ip"] for e in c.report()["recent"]] == ["", ""]
+    assert c.report()["banned_now"] == 0
+    assert caplog.text.count("送り元の番号を確かめられませんでした") == 1
+
+
+@pytest.mark.parametrize("value", ["2001:4860::1%scope\tFORGED", "1.2.3.4\tFORGED", "fe80::1%eth0", "１.２.３.４"])
+def test_addresses_with_decorations_are_not_read(value):
+    c = make(client_ip="x-forwarded-for")
+    ask(c, "/.env", headers={"x-forwarded-for": value}, peer="10.0.0.2")
+    e = c.report()["recent"][0]
+    assert e["ip"] == "" and "\t" not in str(e)
+
+
+def test_bad_trusted_proxies_refuse_to_start():
+    with pytest.raises(ValueError):
+        make(trusted_proxies=["not-a-network"])
+    with pytest.raises(ValueError):
+        make(trusted_proxies="10.0.0.0/8")
+
+
+# ---------------------------------------------------------------- よそのページからの読み込み
+
+@pytest.mark.parametrize("headers", [
+    {"sec-fetch-site": "cross-site", "sec-fetch-dest": "image"},   # よそのページの <img src=".../.env">
+    {"sec-fetch-site": "same-site"},
+    {"sec-fetch-site": "same-origin"},
+    {"referer": "https://example.net/page"},                       # Sec-Fetch-* を送らない古いブラウザ
+    {"origin": "https://example.net"},
+])
+def test_requests_from_a_web_page_are_recorded_but_not_banned(headers):
+    c = make(ban=True)
+    assert ask(c, "/.env", headers=headers).status == 200
+    e = c.report()["recent"][0]
+    assert e["from_page"] is True and e["banned"] is False
+    assert ask(c, "/", now=1001.0) is None                         # 閲覧者は、ふつうに使い続けられる
+
+
+def test_bait_key_loaded_by_a_web_page_does_not_ban_the_viewer():
+    c = make(ban=True)
+    key = c.bait_key("env", "db")
+    assert ask(c, "/x", query=f"api_key={key}", headers={"sec-fetch-site": "cross-site"}) == FORBIDDEN
+    assert c.report()["recent"][0]["banned"] is False
+    assert ask(c, "/", now=1001.0) is None
+
+
+def test_typed_address_still_bans():
+    c = make(ban=True)
+    ask(c, "/.env", headers={"sec-fetch-site": "none", "sec-fetch-mode": "navigate"})
+    assert c.report()["recent"][0]["banned"] is True
+    assert ask(c, "/", now=1001.0) == FORBIDDEN
+
+
 # ---------------------------------------------------------------- 記録と知らせ
 
 def test_log_is_capped_but_totals_keep_counting():
@@ -281,6 +370,31 @@ def test_control_characters_cannot_forge_log_lines(caplog):
     e = c.report()["recent"][0]
     assert e["path"] == "/x?[sanadamaru] fake?" and e["ua"] == "a?b"
     assert caplog.text.count("[sanadamaru] fake") == 1 and "\n[sanadamaru] fake" not in caplog.text
+
+
+def test_log_lines_are_capped_per_minute(caplog):
+    c = make(ban=True, log_max=5, log_per_minute=5)
+    key = c.bait_key("env", "db")
+    with caplog.at_level(logging.WARNING, logger="sanadamaru"):
+        for i in range(21):
+            ask(c, "/health", query=f"api_key={key}", now=1000.0 + i)
+        ask(c, "/health", query=f"api_key={key}", now=1061.0)       # 次の1分
+    lines = [r for r in caplog.records if r.getMessage().startswith("[sanadamaru] bait_key")]
+    assert len(lines) == 6
+    assert "(+16 not logged)" in lines[-1].getMessage()
+    rep = c.report()
+    assert rep["total"]["bait_key"] == 22 and rep["log_lines_not_written"] == 16
+
+
+@pytest.mark.parametrize("ch", ["\u202e", "\u202a", "\u2066", "\u200b", "\u200f", "\ufeff", "\u2028", "\u0085"])
+def test_invisible_and_direction_characters_are_replaced(caplog, ch):
+    c = make()
+    key = c.bait_key("env", "db")
+    with caplog.at_level(logging.WARNING, logger="sanadamaru"):
+        ask(c, f"/x{ch}FAKE", headers={"x-api-key": key, "user-agent": f"ua{ch}x"})
+    e = c.report()["recent"][0]
+    assert e["path"] == "/x?FAKE" and e["ua"] == "ua?x"
+    assert ch not in caplog.text
 
 
 def test_log_alert_writes_an_error(caplog):

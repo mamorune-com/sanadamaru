@@ -3,7 +3,7 @@
 AI が休まず探しに来る「よくある穴」（`/.env`・`/.git/config` など）に偽の扉を置き、触れた相手を確かめる守りの部品です。反撃はしません。依存する部品はありません。
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.1.0#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.0#subdirectory=python"
 python -m sanadamaru demo
 ```
 
