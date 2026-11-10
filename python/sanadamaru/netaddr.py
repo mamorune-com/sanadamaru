@@ -10,9 +10,12 @@
 from __future__ import annotations
 
 import ipaddress
-from typing import Mapping, Optional, Union
+import re
+from typing import Iterable, Mapping, Optional, Sequence, Tuple, Union
 
 _Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+_Network = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
+_IP_CHARS = re.compile(r"[0-9A-Fa-f:.]+")   # 番号に使う文字だけ（`%scope` などの飾りは受け付けない）
 
 # Cloudflare が公表している番号の範囲（https://www.cloudflare.com/ips/ ・2026-10 時点）。
 # 変わることがあるため、時々見直してください。
@@ -34,6 +37,8 @@ def parse(value: Optional[str]) -> Optional[_Address]:
         s = s[1:].split("]", 1)[0]
     elif s.count(":") == 1:                    # IPv4:port
         s = s.split(":", 1)[0]
+    if not _IP_CHARS.fullmatch(s):             # `fe80::1%eth0` のような飾りや、制御文字が混ざった値は読まない
+        return None
     try:
         a = ipaddress.ip_address(s)
     except ValueError:
@@ -43,9 +48,23 @@ def parse(value: Optional[str]) -> Optional[_Address]:
     return a
 
 
+def networks(values: Iterable[str]) -> Tuple[_Network, ...]:
+    """`10.0.0.0/8` のような範囲の一覧を読む。読めない範囲があれば ValueError（まちがった設定では動かさない）。"""
+    out = []
+    for v in values:
+        try:
+            out.append(ipaddress.ip_network(str(v).strip(), strict=False))
+        except ValueError:
+            raise ValueError(f"番号の範囲として読めません：{v!r}") from None
+    return tuple(out)
+
+
+def _within(a: Optional[_Address], nets: Sequence[_Network]) -> bool:
+    return a is not None and any(a.version == n.version and a in n for n in nets)
+
+
 def is_cloudflare(ip: Optional[str]) -> bool:
-    a = parse(ip)
-    return a is not None and any(a.version == n.version and a in n for n in CLOUDFLARE_NETWORKS)
+    return _within(parse(ip), CLOUDFLARE_NETWORKS)
 
 
 def banable(ip: Optional[str]) -> bool:
@@ -56,27 +75,53 @@ def banable(ip: Optional[str]) -> bool:
     return not is_cloudflare(str(a))
 
 
-def client_ip(mode: str, headers: Mapping[str, str], peer: Optional[str], trusted_hops: int = 1) -> str:
-    """締め出しと記録に使う送り元の番号。読めない時は空の文字列。
+def client_ip(
+    mode: str,
+    headers: Mapping[str, str],
+    peer: Optional[str],
+    trusted_hops: int = 1,
+    trusted_proxies: Sequence[_Network] = (),
+) -> str:
+    """締め出しと記録に使う送り元の番号。確かめられない時は空の文字列（空の番号は締め出しません）。
+
+    見出し（`CF-Connecting-IP`・`X-Forwarded-For`）は、呼び手が自由に書けます。そこで、
+    直接つないできた相手（peer）が「前に立つ仕組み」だと確かめられた時だけ、見出しを読みます。
+    確かめられない相手が見出しを付けてきた時は、見出しを無視して、その相手自身の番号を使います。
 
     - direct：直接つないできた相手（前に何も立っていない時）
-    - cloudflare：Cloudflare が書く `CF-Connecting-IP`（Cloudflare が上書きするので、呼び手は偽れない）。
-      Cloudflare を通らずに届く構成では使わないでください（呼び手が自由に書けてしまいます）。
-    - x-forwarded-for：`X-Forwarded-For` の右から trusted_hops 番目（前に立つ仕組みが足した側）。
+    - cloudflare：`CF-Connecting-IP`。直接の相手が Cloudflare の番号（または trusted_proxies の中）の時だけ読む。
+    - x-forwarded-for：`X-Forwarded-For` の右から trusted_hops 番目。直接の相手が trusted_proxies の中
+      （指定が無ければ、公開されていない番号＝同じ建物の中のロードバランサーなど）の時だけ読む。
+      trusted_hops が2以上の時は、間にはさまる番号も前に立つ仕組み（trusted_proxies・Cloudflare・
+      指定が無ければ公開されていない番号）であることを確かめる。段数が合わない時は空にする。
       左側は呼び手が自由に書けるので、決して使いません。
     """
+    p = parse(peer)
+    own = str(p) if p is not None else ""
     if mode == "cloudflare":
+        if not (_within(p, CLOUDFLARE_NETWORKS) or _within(p, trusted_proxies)):
+            return own                         # Cloudflare を通らずに届いた。見出しは偽れるので読まない
         a = parse(headers.get("cf-connecting-ip"))
-        if a is not None:
-            return str(a)
-    elif mode == "x-forwarded-for":
-        parts = [p.strip() for p in (headers.get("x-forwarded-for") or "").split(",") if p.strip()]
-        if parts:
-            a = parse(parts[max(len(parts) - int(trusted_hops), 0)])
-            if a is not None:
-                return str(a)
-    a = parse(peer)
-    return str(a) if a is not None else ""
+        return str(a) if a is not None else ""
+    if mode == "x-forwarded-for":
+        def is_proxy(a: Optional[_Address]) -> bool:
+            if trusted_proxies:
+                return _within(a, trusted_proxies)
+            return a is not None and not a.is_global
+        if not is_proxy(p):
+            return own                         # 前に立つ仕組みを通らずに届いた。見出しは偽れるので読まない
+        parts = [x.strip() for x in (headers.get("x-forwarded-for") or "").split(",") if x.strip()]
+        hops = int(trusted_hops)
+        if len(parts) < hops:
+            return ""                          # 段数が合わない。左側（呼び手が書ける所）を読まない
+        chain = [parse(x) for x in parts[len(parts) - hops:]]
+        if any(a is None for a in chain):
+            return ""
+        for middle in chain[1:]:
+            if not (is_proxy(middle) or _within(middle, CLOUDFLARE_NETWORKS)):
+                return ""                      # 間に、前に立つ仕組みでない番号がある＝段数が合っていない
+        return str(chain[0])
+    return own
 
 
 def prefix(ip: Optional[str]) -> str:

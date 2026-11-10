@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sanadamaru"
-version = "0.1.0"
+version = "0.2.0"
 description = "真田丸：AI が休まず探しに来る「よくある穴」に偽の扉を置き、触れた相手を確かめる守りの部品（反撃しない・依存なし）"
 readme = "README.md"
 # ライセンスの写し（LICENSE・NOTICE）は、リポジトリのいちばん上のものを python/ に写して部品に入れる（CI が食い違いを落とす）

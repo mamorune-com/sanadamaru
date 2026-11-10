@@ -2,6 +2,19 @@
 
 版ごとの変更です。日付は [リリースの一覧](https://github.com/mamorune-com/sanadamaru/releases) にあります。
 
+## v0.2.0
+
+外部のレビューで見つかった点を直しました。締め出し（既定はオフ）を使う時に、無関係な人を巻き込まないための変更が中心です。
+
+- よそのページに埋め込まれた読み込み（`<img src=".../.env">` など）で扉や偽の鍵に触れた時は、記録だけして締め出しません。`Sec-Fetch-Site`（`none` 以外）・`Referer`・`Origin` で見分けます。記録に `from_page` が加わりました。
+- 転送の見出しは、前に立つ仕組みから届いた時だけ読みます。`cloudflare` は直接の相手が Cloudflare の番号の時、`x-forwarded-for` は `trusted_proxies`（新しい設定・`SANADAMARU_TRUSTED_PROXIES`）の範囲か、指定が無ければ公開されていない番号の時です。
+- `x-forwarded-for` で段数が合わない時（見出しが短い・間の番号が前に立つ仕組みでない）は、左側を読まずに空にします（締め出しません）。
+- 記録の行（WARNING）に1分あたりの上限を付けました（`log_per_minute`・既定60・`SANADAMARU_LOG_PER_MINUTE`）。出さなかった数は次の行と `report()` の `log_lines_not_written` に残ります。
+- 記録に残す住所と UA で、見えない書式文字（表示の向きを変える U+202E など）と行・段落の区切りも「?」に替えます。
+- `%scope` などの飾りが付いた番号は読みません。
+
+**気をつけること：** Cloudflare の後ろにロードバランサーがある構成（Render など）で `cloudflare` を使っていた時は、`x-forwarded-for` と `SANADAMARU_TRUSTED_HOPS=2` に切り替えてください（[docs/deploy.md](docs/deploy.md)）。そのままでは見出しを読まず、締め出しも働きません（無関係な人を巻き込む側には倒れません）。
+
 ## v0.1.0
 
 はじめての版です。

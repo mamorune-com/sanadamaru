@@ -15,6 +15,7 @@ import re
 import secrets
 import threading
 import time
+import unicodedata
 from collections import deque
 from typing import Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 from urllib.parse import unquote_plus
@@ -48,7 +49,9 @@ FOREIGN_KEY_PREFIXES = (
 _KEY_PREFIX_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,31}")
 _TOKEN_HEX = 32              # 偽の鍵の、書き出しの後ろの長さ（16進）
 _SCAN_LIMIT = 16384          # 1つの値の中で、偽の鍵を探す長さの上限（重い問い合わせで手間取らない）
-_CONTROL = re.compile("[\x00-\x1f\x7f-\x9f  ]")
+# 記録に残さない文字の種類：制御文字（Cc）・見えない書式文字（Cf＝表示の向きを変える U+202E など）・
+# 行と段落の区切り（Zl・Zp）・対になっていないサロゲート（Cs）
+_UNSAFE_CATEGORIES = frozenset(("Cc", "Cf", "Zl", "Zp", "Cs"))
 _DOOR_HEADERS = (("x-content-type-options", "nosniff"), ("cache-control", "no-store"))
 
 
@@ -64,9 +67,27 @@ class Reply(NamedTuple):
 FORBIDDEN = Reply(403, "text/plain; charset=utf-8", b"forbidden", (("cache-control", "no-store"),))
 
 
+def _unsafe(ch: str) -> bool:
+    return unicodedata.category(ch) in _UNSAFE_CATEGORIES
+
+
 def _clean(value: object, limit: int) -> str:
-    """記録に残す前に、改行などの制御文字を「?」に替えて、長さをそろえる（記録の書き換えを防ぐ）。"""
-    return _CONTROL.sub("?", "" if value is None else str(value))[:limit]
+    """記録に残す前に、改行・制御文字・表示の向きを変える文字などを「?」に替えて、長さをそろえる（記録の書き換えを防ぐ）。"""
+    text = ("" if value is None else str(value))[:limit]
+    return "".join("?" if _unsafe(ch) else ch for ch in text)
+
+
+def _from_web_page(headers: Mapping[str, str]) -> bool:
+    """よそのページ（や自分のページ）に埋め込まれた読み込み・リンクから来た問い合わせか。
+
+    ブラウザは、画像・スクリプト・リンクの読み込みに `Sec-Fetch-Site`（cross-site・same-site・same-origin）を付けます。
+    アドレス欄に打ち込んだ時だけ `none` です。古いブラウザは `Sec-Fetch-*` を送らないので、`Referer`・`Origin` も見ます。
+    これらがある時は、閲覧者本人ではなく、ページを書いた誰かが読み込ませた可能性があるので、締め出しません。
+    """
+    site = (headers.get("sec-fetch-site") or "").strip().lower()
+    if site and site != "none":
+        return True
+    return bool(headers.get("referer") or headers.get("origin"))
 
 
 def _norm(path: str) -> str:
@@ -107,10 +128,12 @@ class Castle:
         client_ip: str = "direct",
         trusted_hops: int = 1,
         never_block: Sequence[str] = DEFAULT_NEVER_BLOCK,
+        trusted_proxies: Sequence[str] = (),
         alert: Optional[Callable[[dict], None]] = None,
         alert_cooldown: float = 3600.0,
         log_max: int = 500,
         ban_max: int = 10000,
+        log_per_minute: int = 60,
     ) -> None:
         # まちがった設定のままでは動かさない（動き出してから気づくと、無関係な人を巻き込むため）
         if client_ip not in CLIENT_IP_MODES:
@@ -123,8 +146,11 @@ class Castle:
             if key_prefix.startswith(foreign):
                 raise ValueError(f"key_prefix {key_prefix!r} は他社の鍵の形（{foreign}…）に似ています。"
                                  "自分のサービスの鍵に似せてください（docs/lines.md の 4）")
-        if int(ban_seconds) <= 0 or int(log_max) <= 0 or int(ban_max) <= 0:
-            raise ValueError("ban_seconds・log_max・ban_max は1以上にしてください")
+        if int(ban_seconds) <= 0 or int(log_max) <= 0 or int(ban_max) <= 0 or int(log_per_minute) <= 0:
+            raise ValueError("ban_seconds・log_max・ban_max・log_per_minute は1以上にしてください")
+        if isinstance(trusted_proxies, str):
+            raise ValueError("trusted_proxies は範囲の一覧にしてください（例：[\"10.0.0.0/8\"]）")
+        proxies = netaddr.networks(trusted_proxies)
         lifelines: List[str] = []
         for p in never_block:
             if not isinstance(p, str) or not p.startswith("/") or _norm(p) == "/":
@@ -150,6 +176,7 @@ class Castle:
         self.ban_seconds = int(ban_seconds)
         self.client_ip_mode = client_ip
         self.trusted_hops = int(trusted_hops)
+        self.trusted_proxies = proxies
         self.never_block = tuple(lifelines)
         self.alert = alert
         self.alert_cooldown = float(alert_cooldown)
@@ -163,6 +190,12 @@ class Castle:
         self._by_door: Dict[str, int] = {}
         self._bait_by_marker: Dict[str, int] = {}
         self._blocked = 0
+        self._log_per_minute = int(log_per_minute)
+        self._log_window = 0.0               # 記録の行を数えている1分の始まり
+        self._log_lines = 0                  # その1分に出した行の数
+        self._log_suppressed = 0             # 出さずに数えた行の数（次に出す行に添える）
+        self._log_suppressed_total = 0
+        self._warned_unknown_ip = False
         self._keys: Dict[str, Tuple[str, str]] = {}        # 偽の鍵 -> (目印, 欄)
         self._key_pattern = re.compile(re.escape(key_prefix) + "[0-9a-f]{%d}" % _TOKEN_HEX)
         self._doors: Dict[str, Tuple[str, Reply]] = {}     # そろえた住所 -> (目印, 答え)
@@ -177,7 +210,8 @@ class Castle:
         """SANADAMARU_* の環境変数から作る。overrides に渡した設定が優先します。
 
         SANADAMARU_SECRET・SANADAMARU_BAN（1でオン）・SANADAMARU_BAN_SECONDS・SANADAMARU_CLIENT_IP・
-        SANADAMARU_TRUSTED_HOPS・SANADAMARU_KEY_PREFIX・SANADAMARU_NEVER_BLOCK（カンマ区切り・/health に足す）
+        SANADAMARU_TRUSTED_HOPS・SANADAMARU_TRUSTED_PROXIES（カンマ区切りの範囲）・SANADAMARU_KEY_PREFIX・
+        SANADAMARU_NEVER_BLOCK（カンマ区切り・/health に足す）・SANADAMARU_LOG_PER_MINUTE
         """
         env = os.environ if environ is None else environ
         kw: dict = {}
@@ -191,6 +225,10 @@ class Castle:
             kw["client_ip"] = env["SANADAMARU_CLIENT_IP"].strip()
         if env.get("SANADAMARU_TRUSTED_HOPS"):
             kw["trusted_hops"] = int(env["SANADAMARU_TRUSTED_HOPS"])
+        if env.get("SANADAMARU_TRUSTED_PROXIES"):
+            kw["trusted_proxies"] = tuple(p.strip() for p in env["SANADAMARU_TRUSTED_PROXIES"].split(",") if p.strip())
+        if env.get("SANADAMARU_LOG_PER_MINUTE"):
+            kw["log_per_minute"] = int(env["SANADAMARU_LOG_PER_MINUTE"])
         if env.get("SANADAMARU_KEY_PREFIX"):
             kw["key_prefix"] = env["SANADAMARU_KEY_PREFIX"].strip()
         if env.get("SANADAMARU_NEVER_BLOCK"):
@@ -206,7 +244,7 @@ class Castle:
         if not isinstance(door, Door):
             raise TypeError(f"{path!r} の扉は Door で作ってください")
         if (not isinstance(path, str) or not path.startswith("/") or any(c in path for c in "?# ")
-                or _CONTROL.search(path)):
+                or any(_unsafe(c) for c in path)):
             raise ValueError(f"扉の住所が正しくありません：{path!r}")
         p = _norm(path)
         if p == "/":
@@ -262,7 +300,11 @@ class Castle:
         """
         now = time.time() if now is None else now
         p = _norm(path)
-        ip = netaddr.client_ip(self.client_ip_mode, headers, peer, self.trusted_hops)
+        ip = netaddr.client_ip(self.client_ip_mode, headers, peer, self.trusted_hops, self.trusted_proxies)
+        if not ip and peer and not self._warned_unknown_ip and self.client_ip_mode != "direct":
+            self._warned_unknown_ip = True
+            logger.warning("[sanadamaru] 送り元の番号を確かめられませんでした。この問い合わせでは締め出しません"
+                           "（client_ip・trusted_hops・trusted_proxies の設定を確かめてください：docs/deploy.md）")
         lifeline = _under(p, self.never_block)
         if self.ban and not lifeline and self._is_banned(ip, now):
             with self._lock:
@@ -317,10 +359,12 @@ class Castle:
             "ip": ip,
             "ip_prefix": netaddr.prefix(ip),
             "ua": _clean(headers.get("user-agent"), 120),
+            "from_page": _from_web_page(headers),
             "banned": False,
         }
         with self._lock:
-            if self.ban and netaddr.banable(ip):
+            # ページに埋め込まれた読み込みは、閲覧者本人の操作とは限らないので、締め出さない（docs/lines.md の 5）
+            if self.ban and netaddr.banable(ip) and not event["from_page"]:
                 event["banned"] = self._ban_locked(ip, now)
             self._log.append(event)
             self._totals[kind] += 1
@@ -328,11 +372,31 @@ class Castle:
                 self._by_door[path] = self._by_door.get(path, 0) + 1
             else:
                 self._bait_by_marker[marker] = self._bait_by_marker.get(marker, 0) + 1
-        logger.warning("[sanadamaru] %s path=%s marker=%s%s from=%s%s", kind, event["path"], marker,
-                       f" slot={slot}" if slot else "", event["ip_prefix"] or "?",
-                       " banned" if event["banned"] else "")
+            emit, skipped = self._log_slot_locked(now)
+        if emit:
+            logger.warning("[sanadamaru] %s path=%s marker=%s%s from=%s%s%s%s", kind, event["path"], marker,
+                           f" slot={slot}" if slot else "", event["ip_prefix"] or "?",
+                           " from_page" if event["from_page"] else "",
+                           " banned" if event["banned"] else "",
+                           f" (+{skipped} not logged)" if skipped else "")
         self._maybe_alert(event, now)
         return event
+
+    def _log_slot_locked(self, now: float) -> Tuple[bool, int]:
+        """記録の行を出してよいか。1分に log_per_minute 行まで（同じ問い合わせの繰り返しで、記録の置き場を埋めさせない）。
+
+        出さなかった行は数えておき、次に出す行に「(+N not logged)」と添えます。件数は report() にも残ります。
+        """
+        if now - self._log_window >= 60 or now < self._log_window:
+            self._log_window = now
+            self._log_lines = 0
+        if self._log_lines >= self._log_per_minute:
+            self._log_suppressed += 1
+            self._log_suppressed_total += 1
+            return False, 0
+        self._log_lines += 1
+        skipped, self._log_suppressed = self._log_suppressed, 0
+        return True, skipped
 
     def _maybe_alert(self, event: dict, now: float) -> None:
         if self.alert is None:
@@ -386,6 +450,7 @@ class Castle:
                 "secret_is_ephemeral": self.secret_is_ephemeral,
                 "banned_now": sum(1 for t in self._banned.values() if t > now),
                 "blocked": self._blocked,
+                "log_lines_not_written": self._log_suppressed_total,
                 "total": dict(self._totals),
                 "by_door": dict(self._by_door),
                 "bait_key_by_marker": dict(self._bait_by_marker),
@@ -403,6 +468,10 @@ class Castle:
             self._by_door.clear()
             self._bait_by_marker.clear()
             self._blocked = 0
+            self._log_window = 0.0
+            self._log_lines = 0
+            self._log_suppressed = 0
+            self._log_suppressed_total = 0
 
 
 def log_alert(event: dict) -> None:
