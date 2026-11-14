@@ -1,5 +1,7 @@
 # 仕組み
 
+[English](en/how-it-works.md) ・ **日本語**
+
 真田丸の本体は `Castle.check`（[python/sanadamaru/castle.py](../python/sanadamaru/castle.py)）です。FastAPI・Flask などへのつなぎ（`asgi.py`・`wsgi.py`）は、問い合わせを `Castle.check` に渡すだけです。
 
 ## 見る順番
