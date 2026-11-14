@@ -13,8 +13,8 @@ It never hacks back. It never touches the other side's systems.
 GET /                                    → passed straight through to your app
 GET /.env                                → 200, plausible but fake contents; logged (marker: env)
 GET /api/admin/users
-    Authorization: Bearer app_live_9e39…  → 403; logged (marker: env, field: db)
-                                            "this key was taken from /.env, the DB_PASSWORD line"
+    Authorization: Bearer app_live_9e39… → 403; logged (marker: env, field: db)
+                                           "this key was taken from /.env, the DB_PASSWORD line"
 ```
 
 Try it on your own machine (nothing is sent anywhere):
