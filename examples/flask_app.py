@@ -1,9 +1,9 @@
-"""Flask に真田丸を入れる例。
+"""Example: adding sanadamaru to Flask.
 
     pip install flask
     SANADAMARU_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))") flask --app flask_app run
 
-このファイルを `python examples/flask_app.py` で動かすと、入れた後の動きを確かめます（要 flask）。
+Run this file with `python examples/flask_app.py` to check how it behaves once installed (needs flask).
 """
 from flask import Flask
 
@@ -19,7 +19,7 @@ def index():
     return {"hello": "world"}
 
 
-# Flask の本体（wsgi_app）を、外側から包みます
+# Wrap Flask's core (wsgi_app) from the outside
 app.wsgi_app = SanadamaruWSGI(app.wsgi_app, castle=castle)
 
 

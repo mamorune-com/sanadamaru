@@ -29,3 +29,19 @@ Express・Go・Rails などへの移植を歓迎します。[docs/how-it-works.m
 ## 抜け道を見つけた時
 
 公開の Issue や Pull Request には書かず、[SECURITY.md](SECURITY.md) の方法で、非公開でお知らせください。
+
+---
+
+## English
+
+Contributions are welcome. Every change is checked against [the lines sanadamaru never crosses](docs/en/lines.md) before it is merged.
+
+**Adding or fixing a door.** Add a content function and the path to `default_doors()` in [python/sanadamaru/doors.py](python/sanadamaru/doors.py). Content must be plain text only, entirely fake (no real keys, settings, user data, or names and emails that look like real people), use `key("field")` for bait keys (never another company's key format), and be identical on every read (no randomness or timestamps). Make sure the path does not collide with real endpoints in ordinary web apps. In the pull request, include evidence that the path is actually probed, such as published research or hit counts from your own server logs, with source addresses removed. Run `cd python && python -m pytest`; the tests check the content rules for every default door.
+
+**Porting to another language or framework.** Ports to Express, Go, Rails and others are welcome. Follow "Porting to other languages" in [docs/en/how-it-works.md](docs/en/how-it-works.md). A port can live in its own repository; open an issue and we will link to it from the README.
+
+**Stage 2 (the tarpit).** Read the conditions in [docs/en/stage2.md](docs/en/stage2.md) and start with a design discussion in an issue. Please send code only after the design is settled.
+
+**Review.** Mistakes in client address handling and blocking (`netaddr.py`, `castle.py`) can lock out innocent people, so maintainers review changes there with particular care. Changes that loosen the lines will not be merged.
+
+**Found a loophole?** Do not post it in a public issue or pull request. Report it privately as described in [SECURITY.md](SECURITY.md).

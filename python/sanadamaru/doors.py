@@ -1,11 +1,11 @@
-"""偽の扉と、その中身（すべて作り物）。
+"""Decoy doors and their contents (all fake).
 
-扉の中身を書く時の約束（docs/lines.md）：
-- 本物の鍵・設定・利用者の情報を入れない。実在の人に見える名前やメールアドレスも入れない。
-- 文字だけを返す。スクリプトや、開くと重くなるファイル（圧縮爆弾など）は入れない。
-- 開くたびに同じ中身にする。乱数や時刻を入れると、開くたびに変わり、偽物だと見破られます。
-- 偽の鍵は key(欄の名前) で埋め込む。欄ごとに違う鍵になり、どの扉のどの欄から持ち出されたかが分かります。
-- 住所は「本物の利用者や画面が決して開かない住所」だけにする。本物の窓口と重なると、利用者が記録されます。
+Rules for writing door contents (docs/en/lines.md):
+- No real keys, settings or user data. No names or email addresses that look like real people.
+- Plain text only. No scripts and no files that get heavy when opened (such as zip bombs).
+- The same content on every read. Random values or timestamps would change between reads and give the decoy away.
+- Embed bait keys with key(field_name). Each field gets its own key, so you learn which kind of door (marker) and which field a key came from.
+- Only use paths that real users and pages never open. A path that collides with a real endpoint records real users.
 """
 from __future__ import annotations
 
@@ -20,11 +20,12 @@ NAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
 
 @dataclass(frozen=True)
 class Door:
-    """偽の扉。
+    """A decoy door.
 
-    marker：どの扉かを表す短い名前（英小文字・数字・`_`・`-`）。記録と偽の鍵の照合に使います。
-    content_type：返す中身の種類（例：`text/plain; charset=utf-8`）。
-    template：中身を作る関数。引数の key(欄の名前) を呼ぶと、その欄の偽の鍵が返ります。
+    marker: a short name for the kind of door (lowercase letters, digits, `_`, `-`). Used in records and to match bait keys.
+    Doors that share a marker share bait keys.
+    content_type: the content type to return (for example `text/plain; charset=utf-8`).
+    template: a function that builds the content. Calling its argument key(field_name) returns that field's bait key.
     """
 
     marker: str
@@ -33,11 +34,11 @@ class Door:
 
     def __post_init__(self) -> None:
         if not isinstance(self.marker, str) or not NAME_PATTERN.fullmatch(self.marker):
-            raise ValueError(f"扉の目印は、英小文字・数字・_・- の32文字までにしてください：{self.marker!r}")
+            raise ValueError(f"door marker must be up to 32 lowercase letters, digits, _ or -: {self.marker!r}")
         if not self.content_type or any(c in self.content_type for c in "\r\n"):
-            raise ValueError(f"中身の種類が正しくありません：{self.content_type!r}")
+            raise ValueError(f"invalid content_type: {self.content_type!r}")
         if not callable(self.template):
-            raise TypeError("template には、中身を作る関数を渡してください")
+            raise TypeError("template must be a function that builds the content")
 
 
 TEXT = "text/plain; charset=utf-8"
@@ -150,10 +151,10 @@ def _actuator_env(key: KeyMaker) -> str:
 
 
 def default_doors() -> Dict[str, Door]:
-    """既定の扉（住所 -> 扉）。呼ぶたびに新しい dict を返すので、足したり消したりして使えます。
+    """The default doors (path -> door). Returns a new dict on every call, so you can add or remove doors freely.
 
-    どれも、攻撃がまず探しに来る住所で、ふつうの Web アプリの本物の窓口とは重なりません。
-    自分のアプリに同じ住所の本物の窓口がある時は、その扉を消してください。
+    All of them are paths scanners probe first, and none of them is a real endpoint in an ordinary web app.
+    If your app has a real endpoint at one of these paths, remove that door.
     """
     env = Door("env", TEXT, _env)
     git = Door("git", TEXT, _git_config)

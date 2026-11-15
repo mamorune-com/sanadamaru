@@ -1,5 +1,7 @@
 # 仕組み
 
+[English](en/how-it-works.md) ・ **日本語**
+
 真田丸の本体は `Castle.check`（[python/sanadamaru/castle.py](../python/sanadamaru/castle.py)）です。FastAPI・Flask などへのつなぎ（`asgi.py`・`wsgi.py`）は、問い合わせを `Castle.check` に渡すだけです。
 
 ## 見る順番
@@ -22,9 +24,10 @@
 ## 目印入りの偽の鍵
 
 ```text
-偽の鍵 = 書き出し（key_prefix） + HMAC-SHA256(secret, "sanadamaru/v1" ‖ 目印 ‖ 欄) の先頭32文字（16進）
+偽の鍵 = 書き出し（key_prefix） + HMAC-SHA256(secret, "sanadamaru/v1" ‖ 0x00 ‖ 目印 ‖ 0x00 ‖ 欄) の先頭32文字（16進）
 ```
 
+- `0x00` は区切りの1バイト（ゼロ）で、文字は UTF-8 で数えます。Python では `hmac.new(secret, f"sanadamaru/v1\x00{marker}\x00{field}".encode("utf-8"), hashlib.sha256).hexdigest()[:32]` です。
 - 同じ secret・目印・欄なら、いつも同じ鍵になります。secret が違えば、別の鍵になります（導入ごとに違う鍵）。
 - 鍵の中に、目印や欄はそのまま書かれていません。相手は、鍵を見ても、どの扉のものか分かりません。
 - 照らし合わせは、作った鍵の一覧と、そのまま比べます。書き出しが同じでも、一覧に無い鍵は偽の鍵とみなしません。

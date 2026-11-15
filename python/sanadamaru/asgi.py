@@ -1,9 +1,9 @@
-"""ASGI のつなぎ（FastAPI・Starlette・Django の ASGI など）。
+"""ASGI adapter (FastAPI, Starlette, Django under ASGI and so on).
 
-    app.add_middleware(SanadamaruMiddleware, castle=castle)   # FastAPI・Starlette
+    app.add_middleware(SanadamaruMiddleware, castle=castle)   # FastAPI / Starlette
 
-いちばん外側に置いてください（FastAPI・Starlette では、最後に add_middleware したものが外側です）。
-HTTP 以外（WebSocket・lifespan）は、そのまま通します。
+Make it the outermost layer (in FastAPI and Starlette, the last middleware added is the outermost).
+Anything other than HTTP (WebSocket, lifespan) is passed straight through.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from .castle import Castle, Reply
 class SanadamaruMiddleware:
     def __init__(self, app, castle: Optional[Castle] = None, **options) -> None:
         if castle is not None and options:
-            raise TypeError("castle を渡す時は、ほかの設定は Castle の側に書いてください")
+            raise TypeError("when you pass castle=, put all other settings on the Castle itself")
         self.app = app
         self.castle = castle if castle is not None else Castle(**options)
 
