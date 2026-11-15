@@ -78,6 +78,36 @@ bait key = prefix (key_prefix) + first 32 hex characters of HMAC-SHA256(secret, 
 
 Records and blocks live in each process's memory. With several processes or servers, each records and blocks on its own. Bait keys are derived from the secret, so every process produces the same keys and a key is recognized wherever it is used.
 
+### Keeping records and blocks outside memory (store)
+
+Pass `store=` to keep records and blocks somewhere else as well, so that they survive a restart and blocks are shared between processes. A store is any object with three methods:
+
+```python
+class JsonlStore:
+    """A minimal example: append every record to a file. Blocks stay per process."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def save_event(self, event):              # every record, including the full source address
+        import json
+        with open(self.path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+
+    def ban(self, ip, until):                 # a source was blocked until `until` (epoch seconds)
+        pass
+
+    def ban_until(self, ip):                  # expiry of a block made by another process, or None
+        return None
+
+castle = Castle.from_env(store=JsonlStore("sanadamaru.jsonl"))
+```
+
+- The store only keeps what sanadamaru decided. Every rule still applies to blocks read back from it: blocking must be on, Cloudflare's own and non-public addresses are never blocked, `never_block` paths stay open, and no block lasts longer than `ban_seconds`.
+- If a store raises an error, sanadamaru logs a warning (at most once a minute) and carries on from memory. A failing store never blocks anyone.
+- `ban_until` is asked when a request comes from an address that may be blocked and is not already blocked in memory, so keep it fast (Redis, for example).
+- The records contain full source addresses. Protect the store like `report()`.
+
 ## Porting to other languages
 
 If you port sanadamaru to Express, Go, Rails or anything else, keep these the same:
