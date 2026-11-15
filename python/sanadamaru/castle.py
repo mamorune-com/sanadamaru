@@ -17,7 +17,7 @@ import threading
 import time
 import unicodedata
 from collections import deque
-from typing import Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Protocol, Sequence, Tuple, Union
 from urllib.parse import unquote_plus
 
 from . import netaddr
@@ -118,6 +118,27 @@ def _check_name(kind: str, value: str) -> None:
         raise ValueError(f"{kind} must be up to 32 lowercase letters, digits, _ or -: {value!r}")
 
 
+class Store(Protocol):
+    """Where records and blocks can also be kept, outside this process's memory. Optional.
+
+    sanadamaru works without one. A store lets records survive a restart and lets several processes or
+    servers share blocks. The store only keeps what sanadamaru decided: it never decides who is blocked.
+
+    - save_event(event): called once for every record, with the full record (including the full source address).
+    - ban(ip, until): called when a source is blocked. until is the expiry in epoch seconds.
+    - ban_until(ip): the expiry for a source blocked elsewhere, or None. Only asked about addresses that may be
+      blocked (never Cloudflare's own or non-public addresses), and only when blocking is on.
+
+    If a store raises, sanadamaru logs a warning and carries on from memory. A failing store never blocks anyone.
+    """
+
+    def save_event(self, event: dict) -> None: ...
+
+    def ban(self, ip: str, until: float) -> None: ...
+
+    def ban_until(self, ip: str) -> Optional[float]: ...
+
+
 class Castle:
     """The outpost that holds the decoy doors and bait keys. Share one Castle across the whole app.
 
@@ -142,6 +163,7 @@ class Castle:
         log_max: int = 500,
         ban_max: int = 10000,
         log_per_minute: int = 60,
+        store: Optional[Store] = None,
     ) -> None:
         # Refuse to start with a wrong setting (finding out after it runs could catch uninvolved people)
         if client_ip not in CLIENT_IP_MODES:
@@ -188,6 +210,8 @@ class Castle:
         self.never_block = tuple(lifelines)
         self.alert = alert
         self.alert_cooldown = float(alert_cooldown)
+        self.store = store
+        self._store_warned_at = -1e18
 
         self._lock = threading.Lock()
         self._log: Deque[dict] = deque(maxlen=int(log_max))
@@ -372,10 +396,13 @@ class Castle:
             "from_page": _from_web_page(headers),
             "banned": False,
         }
+        ban_until: Optional[float] = None
         with self._lock:
             # A load embedded in a page is not necessarily the visitor's own action, so do not block it (rule 5 in docs/en/lines.md)
             if self.ban and netaddr.banable(ip) and not event["from_page"]:
                 event["banned"] = self._ban_locked(ip, now)
+                if event["banned"]:
+                    ban_until = self._banned[ip]
             self._log.append(event)
             self._totals[kind] += 1
             if kind == "door":
@@ -389,8 +416,25 @@ class Castle:
                            " from_page" if event["from_page"] else "",
                            " banned" if event["banned"] else "",
                            f" (+{skipped} not logged)" if skipped else "")
+        if self.store is not None:
+            self._call_store("save_event", dict(event))
+            if ban_until is not None:
+                self._call_store("ban", ip, ban_until)
         self._maybe_alert(event, now)
         return event
+
+    def _call_store(self, name: str, *args):
+        try:
+            return getattr(self.store, name)(*args)
+        except Exception as e:   # a failing store never stops the defense, and never blocks anyone
+            now = time.time()
+            with self._lock:
+                warn = now - self._store_warned_at >= 60
+                if warn:
+                    self._store_warned_at = now
+            if warn:
+                logger.warning("[sanadamaru] the store failed (%s: %s); carrying on from memory", name, type(e).__name__)
+            return None
 
     def _log_slot_locked(self, now: float) -> Tuple[bool, int]:
         """Whether a log line may be written. Up to log_per_minute lines per minute (so repeated requests cannot flood your logs).
@@ -437,12 +481,20 @@ class Castle:
             return False
         with self._lock:
             until = self._banned.get(ip)
-            if until is None:
-                return False
-            if until <= now:
+            if until is not None:
+                if until > now:
+                    return True
                 del self._banned[ip]
-                return False
-            return True
+        if self.store is None or not netaddr.banable(ip):
+            return False
+        shared = self._call_store("ban_until", ip)
+        if not isinstance(shared, (int, float)) or isinstance(shared, bool) or shared <= now:
+            return False
+        shared = min(float(shared), now + self.ban_seconds)   # a store cannot block for longer than ban_seconds
+        with self._lock:
+            if ip in self._banned or len(self._banned) < self._ban_max:
+                self._banned[ip] = shared
+        return True
 
     # ------------------------------------------------------------------
     # Reports
