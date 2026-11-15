@@ -115,7 +115,7 @@ def _under(path: str, bases: Sequence[str]) -> bool:
 
 def _check_name(kind: str, value: str) -> None:
     if not isinstance(value, str) or not NAME_PATTERN.fullmatch(value):
-        raise ValueError(f"{kind}は、英小文字・数字・_・- の32文字までにしてください：{value!r}")
+        raise ValueError(f"{kind} must be up to 32 lowercase letters, digits, _ or -: {value!r}")
 
 
 class Castle:
@@ -145,36 +145,36 @@ class Castle:
     ) -> None:
         # まちがった設定のままでは動かさない（動き出してから気づくと、無関係な人を巻き込むため）
         if client_ip not in CLIENT_IP_MODES:
-            raise ValueError(f"client_ip は {', '.join(CLIENT_IP_MODES)} のどれかにしてください：{client_ip!r}")
+            raise ValueError(f"client_ip must be one of {', '.join(CLIENT_IP_MODES)}: {client_ip!r}")
         if int(trusted_hops) < 1:
-            raise ValueError("trusted_hops は1以上にしてください（前に立つ仕組みの数）")
+            raise ValueError("trusted_hops must be 1 or more (the number of proxies in front of the app)")
         if not isinstance(key_prefix, str) or not _KEY_PREFIX_PATTERN.fullmatch(key_prefix):
-            raise ValueError(f"key_prefix は、英数字と _ . - の2〜32文字にしてください：{key_prefix!r}")
+            raise ValueError(f"key_prefix must be 2 to 32 letters, digits, _, . or -: {key_prefix!r}")
         for foreign in FOREIGN_KEY_PREFIXES:
             if key_prefix.startswith(foreign):
-                raise ValueError(f"key_prefix {key_prefix!r} は他社の鍵の形（{foreign}…）に似ています。"
-                                 "自分のサービスの鍵に似せてください（docs/lines.md の 4）")
+                raise ValueError(f"key_prefix {key_prefix!r} looks like another company's key format ({foreign}…). "
+                                 "Make it look like your own service's keys (see rule 4 in docs/en/lines.md)")
         if int(ban_seconds) <= 0 or int(log_max) <= 0 or int(ban_max) <= 0 or int(log_per_minute) <= 0:
-            raise ValueError("ban_seconds・log_max・ban_max・log_per_minute は1以上にしてください")
+            raise ValueError("ban_seconds, log_max, ban_max and log_per_minute must be 1 or more")
         if isinstance(trusted_proxies, str):
-            raise ValueError("trusted_proxies は範囲の一覧にしてください（例：[\"10.0.0.0/8\"]）")
+            raise ValueError("trusted_proxies must be a list of ranges (for example [\"10.0.0.0/8\"])")
         proxies = netaddr.networks(trusted_proxies)
         lifelines: List[str] = []
         for p in never_block:
             if not isinstance(p, str) or not p.startswith("/") or _norm(p) == "/":
-                raise ValueError(f"never_block には「/」以外の住所を書いてください：{p!r}")
+                raise ValueError(f"never_block paths must not be \"/\": {p!r}")
             lifelines.append(_norm(p))
 
         if secret is None:
             self._secret = secrets.token_bytes(32)
             self.secret_is_ephemeral = True
-            logger.warning("[sanadamaru] secret が未設定です。起動のたびに偽の鍵が変わり、前の起動で持ち出された鍵は"
-                           "照合できません（SANADAMARU_SECRET を設定してください）")
+            logger.warning("[sanadamaru] no secret is set. Bait keys will change on every start, and keys taken before a restart "
+                           "cannot be matched (set SANADAMARU_SECRET)")
         else:
             raw = secret.encode("utf-8") if isinstance(secret, str) else bytes(secret)
             if len(raw) < 16:
-                raise ValueError('secret は16バイト以上にしてください（作り方の例：'
-                                 'python -c "import secrets; print(secrets.token_hex(32))"）')
+                raise ValueError('secret must be at least 16 bytes (to make one: '
+                                 'python -c "import secrets; print(secrets.token_hex(32))")')
             self._secret = raw
             self.secret_is_ephemeral = False
 
@@ -250,18 +250,18 @@ class Castle:
     # ------------------------------------------------------------------
     def _add_door(self, path: str, door: Door) -> None:
         if not isinstance(door, Door):
-            raise TypeError(f"{path!r} の扉は Door で作ってください")
+            raise TypeError(f"the door for {path!r} must be a Door")
         if (not isinstance(path, str) or not path.startswith("/") or any(c in path for c in "?# ")
                 or any(_unsafe(c) for c in path)):
-            raise ValueError(f"扉の住所が正しくありません：{path!r}")
+            raise ValueError(f"invalid door path: {path!r}")
         p = _norm(path)
         if p == "/":
-            raise ValueError("「/」は扉にできません（すべての利用者が触れてしまいます）")
+            raise ValueError("\"/\" cannot be a door (every user would touch it)")
         if _under(p, self.never_block):
-            raise ValueError(f"扉 {path} が、止めない窓口（never_block）と重なっています")
+            raise ValueError(f"door {path} overlaps a never_block path")
         body = door.template(self._key_maker(door.marker))
         if not isinstance(body, str):
-            raise TypeError(f"{path!r} の扉の template は、文字列を返してください")
+            raise TypeError(f"the template of the door for {path!r} must return a string")
         self._doors[p] = (door.marker, Reply(200, door.content_type, body.encode("utf-8"), _DOOR_HEADERS))
 
     def _key_maker(self, marker: str) -> Callable[..., str]:
@@ -275,8 +275,8 @@ class Castle:
         同じ secret なら、何度呼んでも同じ鍵になります（本物の設定ファイルも、開くたびには変わらないため）。
         扉の外（偽の書類など）に置く鍵も、ここで作れば、使われた時に気づけます。
         """
-        _check_name("目印", marker)
-        _check_name("欄の名前", slot)
+        _check_name("marker", marker)
+        _check_name("field name", slot)
         mac = hmac.new(self._secret, f"sanadamaru/v1\x00{marker}\x00{slot}".encode("utf-8"), hashlib.sha256)
         key = self.key_prefix + mac.hexdigest()[:_TOKEN_HEX]
         with self._lock:
@@ -311,8 +311,8 @@ class Castle:
         ip = netaddr.client_ip(self.client_ip_mode, headers, peer, self.trusted_hops, self.trusted_proxies)
         if not ip and peer and not self._warned_unknown_ip and self.client_ip_mode != "direct":
             self._warned_unknown_ip = True
-            logger.warning("[sanadamaru] 送り元の番号を確かめられませんでした。この問い合わせでは締め出しません"
-                           "（client_ip・trusted_hops・trusted_proxies の設定を確かめてください：docs/deploy.md）")
+            logger.warning("[sanadamaru] could not determine the client address, so this request will not be blocked "
+                           "(check client_ip, trusted_hops and trusted_proxies: docs/en/deploy.md)")
         lifeline = _under(p, self.never_block)
         if self.ban and not lifeline and self._is_banned(ip, now):
             with self._lock:
@@ -419,7 +419,7 @@ class Castle:
         try:
             self.alert(payload)
         except Exception as e:   # 知らせが失敗しても、守りは止めない
-            logger.warning("[sanadamaru] 知らせを送れませんでした：%s", type(e).__name__)
+            logger.warning("[sanadamaru] failed to send an alert: %s", type(e).__name__)
 
     def _ban_locked(self, ip: str, now: float) -> bool:
         if ip not in self._banned and len(self._banned) >= self._ban_max:
@@ -484,6 +484,6 @@ class Castle:
 
 def log_alert(event: dict) -> None:
     """知らせを ERROR の記録として出す。Sentry などは ERROR を拾うので、これを alert に渡すと運営者に届きます。"""
-    what = "偽の鍵が使われました" if event.get("kind") == "bait_key" else "偽の扉に触れました"
-    logger.error("[sanadamaru] 知らせ：%s path=%s marker=%s from=%s", what, event.get("path"),
+    what = "a bait key was used" if event.get("kind") == "bait_key" else "a decoy door was touched"
+    logger.error("[sanadamaru] ALERT: %s path=%s marker=%s from=%s", what, event.get("path"),
                  event.get("marker"), event.get("ip_prefix") or "?")

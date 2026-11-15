@@ -59,7 +59,7 @@ def networks(values: Iterable[str]) -> Tuple[_Network, ...]:
         try:
             n = ipaddress.ip_network(str(v).strip(), strict=False)
         except ValueError:
-            raise ValueError(f"番号の範囲として読めません：{v!r}") from None
+            raise ValueError(f"not a valid address range: {v!r}") from None
         out.append(n)
         if isinstance(n, ipaddress.IPv6Network) and n.prefixlen >= 96:
             mapped = n.network_address.ipv4_mapped

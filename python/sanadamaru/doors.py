@@ -33,11 +33,11 @@ class Door:
 
     def __post_init__(self) -> None:
         if not isinstance(self.marker, str) or not NAME_PATTERN.fullmatch(self.marker):
-            raise ValueError(f"扉の目印は、英小文字・数字・_・- の32文字までにしてください：{self.marker!r}")
+            raise ValueError(f"door marker must be up to 32 lowercase letters, digits, _ or -: {self.marker!r}")
         if not self.content_type or any(c in self.content_type for c in "\r\n"):
-            raise ValueError(f"中身の種類が正しくありません：{self.content_type!r}")
+            raise ValueError(f"invalid content_type: {self.content_type!r}")
         if not callable(self.template):
-            raise TypeError("template には、中身を作る関数を渡してください")
+            raise TypeError("template must be a function that builds the content")
 
 
 TEXT = "text/plain; charset=utf-8"

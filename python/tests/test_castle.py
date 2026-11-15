@@ -272,7 +272,7 @@ def test_forwarded_for_with_too_many_hops_does_not_read_the_left_side(caplog):
         ask(c, "/.env", headers={"x-forwarded-for": PROBER}, peer="10.0.0.2", now=1001.0)
     assert [e["ip"] for e in c.report()["recent"]] == ["", ""]
     assert c.report()["banned_now"] == 0
-    assert caplog.text.count("送り元の番号を確かめられませんでした") == 1
+    assert caplog.text.count("could not determine the client address") == 1
 
 
 @pytest.mark.parametrize("value", ["2001:4860::1%scope\tFORGED", "1.2.3.4\tFORGED", "fe80::1%eth0", "１.２.３.４"])
@@ -430,7 +430,7 @@ def test_log_alert_writes_an_error(caplog):
     with caplog.at_level(logging.ERROR, logger="sanadamaru"):
         ask(c, "/.env")
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
-    assert len(errors) == 1 and "偽の扉に触れました" in errors[0].getMessage()
+    assert len(errors) == 1 and "a decoy door was touched" in errors[0].getMessage()
 
 
 # ---------------------------------------------------------------- 設定

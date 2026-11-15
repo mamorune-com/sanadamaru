@@ -21,7 +21,7 @@ Try it on your own machine (nothing is sent anywhere):
 
 ```bash
 pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
-python -m sanadamaru demo    # the demo text is in Japanese for now
+python -m sanadamaru demo    # walk through what it does
 python -m sanadamaru doors   # list the default decoy paths
 ```
 

@@ -10,7 +10,7 @@
 - 締め出しは、既定でオフです（見張るだけ）。前に立つ仕組みを確かめてから、オンにできます。
 
 ```text
-$ python -m sanadamaru demo
+$ python -m sanadamaru --lang ja demo
 真田丸の試し（この機械の中だけで動きます。外へは何も送りません）
 
 1. ふつうの利用者が「/」を開く
@@ -62,7 +62,7 @@ AI を使った攻撃は、人よりずっと多くの住所を、休まず試�
 
 ```bash
 pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
-python -m sanadamaru demo
+python -m sanadamaru --lang ja demo   # 表示は英語が既定。--lang ja で日本語
 ```
 
 ### FastAPI・Starlette

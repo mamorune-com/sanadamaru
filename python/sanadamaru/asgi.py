@@ -15,7 +15,7 @@ from .castle import Castle, Reply
 class SanadamaruMiddleware:
     def __init__(self, app, castle: Optional[Castle] = None, **options) -> None:
         if castle is not None and options:
-            raise TypeError("castle を渡す時は、ほかの設定は Castle の側に書いてください")
+            raise TypeError("when you pass castle=, put all other settings on the Castle itself")
         self.app = app
         self.castle = castle if castle is not None else Castle(**options)
 
