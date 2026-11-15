@@ -24,9 +24,10 @@ The core of sanadamaru is `Castle.check` ([python/sanadamaru/castle.py](../../py
 ## Marked bait keys
 
 ```text
-bait key = prefix (key_prefix) + first 32 hex characters of HMAC-SHA256(secret, "sanadamaru/v1" ‖ marker ‖ field)
+bait key = prefix (key_prefix) + first 32 hex characters of HMAC-SHA256(secret, "sanadamaru/v1" ‖ 0x00 ‖ marker ‖ 0x00 ‖ field)
 ```
 
+- `0x00` is a single zero byte used as a separator, and the text is encoded as UTF-8. Python: `hmac.new(secret, f"sanadamaru/v1\x00{marker}\x00{field}".encode("utf-8"), hashlib.sha256).hexdigest()[:32]`.
 - The same secret, marker and field always produce the same key. A different secret produces different keys, so every installation has its own.
 - The marker and field are not visible in the key. Looking at a key does not tell the other side which door it came from.
 - Matching compares against the exact list of generated keys. A key with the right prefix that is not on the list is not treated as a bait key.

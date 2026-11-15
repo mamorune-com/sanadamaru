@@ -3,7 +3,7 @@
 A tiny, dependency-free honeypot for Python web apps. It puts decoy doors on the paths that automated scanners probe first (`/.env`, `/.git/config` and so on) and tells you who touched them. It never hacks back.
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru#subdirectory=python"
 python -m sanadamaru doors
 ```
 

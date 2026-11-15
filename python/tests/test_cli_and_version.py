@@ -30,6 +30,14 @@ def test_doors_lists_default_doors():
     out = io.StringIO()
     assert main(["doors"], out=out) == 0
     assert "/.env" in out.getvalue() and "/.git/config" in out.getvalue()
+    assert out.getvalue().startswith("Default decoy doors")
+
+
+def test_doors_in_japanese():
+    out = io.StringIO()
+    assert main(["--lang", "ja", "doors"], out=out) == 0
+    text = out.getvalue()
+    assert text.startswith("既定の扉") and "/.env" in text and "/.git/config" in text
 
 
 def test_version_option(capsys):

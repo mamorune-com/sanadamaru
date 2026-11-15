@@ -1,9 +1,9 @@
-"""FastAPI に真田丸を入れる例。
+"""Example: adding sanadamaru to FastAPI.
 
     pip install fastapi uvicorn
     SANADAMARU_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))") ADMIN_KEY=... uvicorn fastapi_app:app
 
-このファイルを `python examples/fastapi_app.py` で動かすと、入れた後の動きを確かめます（要 fastapi・httpx）。
+Run this file with `python examples/fastapi_app.py` to check how it behaves once installed (needs fastapi and httpx).
 """
 import hmac
 import os
@@ -12,7 +12,7 @@ from fastapi import FastAPI, Header, HTTPException
 
 from sanadamaru import Castle, SanadamaruMiddleware, log_alert
 
-# 締め出し中でも止めない窓口（死活監視・緊急の窓口）を never_block に書きます
+# Endpoints that must keep working even while blocking is on (health checks, emergency endpoints) go in never_block
 castle = Castle.from_env(never_block=("/health", "/api/sos"), alert=log_alert)
 
 app = FastAPI()
@@ -30,14 +30,14 @@ def index():
 
 @app.get("/admin/sanadamaru")
 def sanadamaru_report(x_admin_key: str = Header(default="")):
-    """記録の一覧。送り元の番号をそのまま含むので、管理の鍵で守ります（鍵が未設定なら開けません）。"""
+    """The records. They contain full source addresses, so they sit behind an admin key (closed if no key is set)."""
     expected = os.environ.get("ADMIN_KEY", "")
     if not expected or not hmac.compare_digest(x_admin_key.encode(), expected.encode()):
         raise HTTPException(status_code=403)
     return castle.report()
 
 
-# いちばん外側に置くため、ほかのミドルウェアより後（最後）に足します
+# Added after (last) all other middleware so that it is the outermost layer
 app.add_middleware(SanadamaruMiddleware, castle=castle)
 
 

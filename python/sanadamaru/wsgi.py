@@ -1,7 +1,7 @@
-"""WSGI のつなぎ（Flask・Django など）。
+"""WSGI adapter (Flask, Django and so on).
 
     app.wsgi_app = SanadamaruWSGI(app.wsgi_app, castle=castle)   # Flask
-    application = SanadamaruWSGI(get_wsgi_application(), castle=castle)   # Django（wsgi.py）
+    application = SanadamaruWSGI(get_wsgi_application(), castle=castle)   # Django (wsgi.py)
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class SanadamaruWSGI:
             if k.startswith("HTTP_"):
                 headers[k[5:].replace("_", "-").lower()] = v
         path = environ.get("PATH_INFO") or "/"
-        try:   # WSGI の PATH_INFO は latin-1 で読まれた UTF-8 なので、読み直す
+        try:   # WSGI's PATH_INFO is UTF-8 decoded as latin-1, so decode it again
             path = path.encode("latin-1").decode("utf-8")
         except (UnicodeEncodeError, UnicodeDecodeError):
             pass

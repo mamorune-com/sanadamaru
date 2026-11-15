@@ -31,7 +31,7 @@ $ python -m sanadamaru --lang ja demo
 | 守り | 中身 |
 |---|---|
 | 偽の扉 | `/.env`・`/.git/config`・`/wp-login.php` など、攻撃がまず探す住所に、作り物の中身を返します。触れたことを記録します。 |
-| 目印入りの偽の鍵 | 扉の中に、扉と欄ごとに違う偽の鍵を置きます。その鍵があとで使われたら、どの扉のどの欄から持ち出されたかが分かります。使われた時は断ります。 |
+| 目印入りの偽の鍵 | 扉の中に、扉と欄ごとに違う偽の鍵を置きます。その鍵があとで使われたら、どの種類の扉（目印）のどの欄から持ち出されたかが分かります。同じ種類の扉は目印が同じなので、`/.env` と `/.env.production` の鍵は同じです。使われた時は断ります。 |
 | 記録と知らせ | 時刻・扉・目印・送り元・UA の頭だけを、メモリに残します（件数に上限があります）。知らせは、同じ扉（目印）につき1時間に1回までです。 |
 | 締め出し | 既定はオフです。オンにすると、扉に触れた送り元を一定時間（既定は24時間）断ります。死活監視や緊急の窓口は止めません。 |
 
@@ -61,7 +61,7 @@ AI を使った攻撃は、人よりずっと多くの住所を、休まず試�
 ### 入れる
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru#subdirectory=python"
 python -m sanadamaru --lang ja demo   # 表示は英語が既定。--lang ja で日本語
 ```
 

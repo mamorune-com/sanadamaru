@@ -273,6 +273,7 @@ def test_forwarded_for_with_too_many_hops_does_not_read_the_left_side(caplog):
     assert [e["ip"] for e in c.report()["recent"]] == ["", ""]
     assert c.report()["banned_now"] == 0
     assert caplog.text.count("could not determine the client address") == 1
+    assert "cannot be banned" in caplog.text and "bait keys still answer" in caplog.text
 
 
 @pytest.mark.parametrize("value", ["2001:4860::1%scope\tFORGED", "1.2.3.4\tFORGED", "fe80::1%eth0", "１.２.３.４"])
@@ -493,3 +494,13 @@ def test_default_doors_is_a_fresh_copy():
     d = default_doors()
     d.pop("/.env")
     assert "/.env" in default_doors()
+
+
+def test_bait_key_matches_the_documented_formula():
+    """docs/how-it-works.md: prefix + first 32 hex of HMAC-SHA256(secret, "sanadamaru/v1" 0x00 marker 0x00 field)."""
+    import hashlib
+    import hmac as _hmac
+    secret = "0123456789abcdef0123456789abcdef"
+    castle = Castle(secret=secret)
+    mac = _hmac.new(secret.encode("utf-8"), b"sanadamaru/v1\x00env\x00db", hashlib.sha256).hexdigest()[:32]
+    assert castle.bait_key("env", "db") == castle.key_prefix + mac

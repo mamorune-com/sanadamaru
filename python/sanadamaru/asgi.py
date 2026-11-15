@@ -1,9 +1,9 @@
-"""ASGI のつなぎ（FastAPI・Starlette・Django の ASGI など）。
+"""ASGI adapter (FastAPI, Starlette, Django under ASGI and so on).
 
-    app.add_middleware(SanadamaruMiddleware, castle=castle)   # FastAPI・Starlette
+    app.add_middleware(SanadamaruMiddleware, castle=castle)   # FastAPI / Starlette
 
-いちばん外側に置いてください（FastAPI・Starlette では、最後に add_middleware したものが外側です）。
-HTTP 以外（WebSocket・lifespan）は、そのまま通します。
+Make it the outermost layer (in FastAPI and Starlette, the last middleware added is the outermost).
+Anything other than HTTP (WebSocket, lifespan) is passed straight through.
 """
 from __future__ import annotations
 

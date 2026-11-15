@@ -14,13 +14,13 @@ GET /                                    → passed straight through to your app
 GET /.env                                → 200, plausible but fake contents; logged (marker: env)
 GET /api/admin/users
     Authorization: Bearer app_live_9e39… → 403; logged (marker: env, field: db)
-                                           "this key was taken from /.env, the DB_PASSWORD line"
+                                           "this key was taken from an .env door, the DB_PASSWORD line"
 ```
 
 Try it on your own machine (nothing is sent anywhere):
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru#subdirectory=python"
 python -m sanadamaru demo    # walk through what it does
 python -m sanadamaru doors   # list the default decoy paths
 ```
@@ -40,7 +40,7 @@ The bait keys tell you one step more. If someone takes a key from a decoy file a
 | Defense | What happens |
 |---|---|
 | Decoy doors | 19 paths that scanners commonly probe (`/.env`, `/.git/config`, `/wp-login.php`, `*.sql`, `/actuator/env` and more) return plausible, entirely fake content. Every hit is recorded. |
-| Marked bait keys | Each door contains fake keys, one per door and per field. If a bait key is presented later (in `Authorization`, `X-API-Key`, the query string and so on), the request is refused with 403 and you learn exactly which door and field it was taken from. |
+| Marked bait keys | Each door contains fake keys, one per door and per field. If a bait key is presented later (in `Authorization`, `X-API-Key`, the query string and so on), the request is refused with 403 and you learn which kind of door (its marker) and which field it was taken from. Doors of the same kind share a marker, so a key from `/.env` and one from `/.env.production` look the same. |
 | Records and alerts | Only the time, door, marker, source address and the start of the user agent are kept, in memory, with hard caps. Alerts are limited to one per door (marker) per hour. |
 | Blocking (opt-in) | When enabled, a source that touched a door is refused for a while (24 hours by default). Health checks and emergency endpoints are never blocked. |
 
@@ -62,10 +62,10 @@ sanadamaru is a defensive component. These rules hold in every version and every
 ### Install
 
 ```bash
-pip install "git+https://github.com/mamorune-com/sanadamaru@v0.2.1#subdirectory=python"
+pip install "git+https://github.com/mamorune-com/sanadamaru#subdirectory=python"
 ```
 
-Python 3.10 or later. The package is not on PyPI yet.
+Python 3.10 or later. The package is not on PyPI yet, so this installs the latest code from GitHub. (The older tag v0.2.1 prints its messages in Japanese and has no `--lang` option.)
 
 ### FastAPI and Starlette
 

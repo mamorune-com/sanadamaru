@@ -1,29 +1,31 @@
-name: 扉を足す・直す
-description: 偽の扉（住所と中身）の追加や、中身を本物らしくする提案
-title: "[扉] "
+name: Add or improve a door
+description: Propose a new decoy door (path and contents), or make an existing one more convincing
+title: "[door] "
 body:
   - type: markdown
     attributes:
       value: |
-        扉の中身は、[越えない線](https://github.com/mamorune-com/sanadamaru/blob/main/docs/lines.md) を守ってください。文字だけ・作り物だけ・他社の鍵の形にしない・開くたびに同じ、です。
+        Door contents must stay inside [the lines sanadamaru never crosses](https://github.com/mamorune-com/sanadamaru/blob/main/docs/en/lines.md): plain text only, entirely fake, no other company's key formats, and the same content on every read.
+
+        日本語での投稿も歓迎します。
   - type: input
     id: path
     attributes:
-      label: 住所
-      description: 例：/.env.staging
+      label: Path
+      description: "For example: /.env.staging"
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: その住所が実際に探されている根拠
-      description: 公開されている調査や、ご自身のサーバーの記録の件数など。送り元の番号は消してください。
+      label: Evidence that scanners actually probe this path
+      description: A public report, or hit counts from your own server logs. Please remove source addresses.
     validations:
       required: true
   - type: textarea
     id: collision
     attributes:
-      label: 本物の窓口と重ならないか
-      description: ふつうの Web アプリや枠組みが、この住所を本物の窓口として使うことはありますか。
+      label: Could it collide with a real endpoint?
+      description: Does any ordinary web app or framework serve a real endpoint at this path?
     validations:
       required: true

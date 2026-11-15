@@ -1,7 +1,7 @@
-"""コマンド：python -m sanadamaru demo ・ python -m sanadamaru doors ・ python -m sanadamaru --version
-（表示は英語。--lang ja で日本語）
+"""Commands: python -m sanadamaru demo, python -m sanadamaru doors, python -m sanadamaru --version
+(output is in English; add --lang ja for Japanese)
 
-demo は、この機械の中だけで、真田丸の動きを順に見せます（ネットワークには出ません）。
+demo walks through what sanadamaru does, entirely on this machine (nothing goes over the network).
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from ._version import __version__
 from .castle import Castle
 
 _DEMO_SECRET = "demo-only-secret-do-not-use-in-production"
-_DEMO_PEER = "203.0.113.7"   # 説明用の番号（RFC 5737。実在の相手ではありません）
+_DEMO_PEER = "203.0.113.7"   # documentation address (RFC 5737, not a real host)
 
 
 _TEXT = {
@@ -53,7 +53,7 @@ def _demo(out: TextIO, lang: str = "en") -> int:
     t = _TEXT[lang]
     lib_logger = logging.getLogger("sanadamaru")
     before = lib_logger.level
-    lib_logger.setLevel(logging.ERROR)   # 試しの間は、記録の行を出さない
+    lib_logger.setLevel(logging.ERROR)   # no log lines during the demo
     try:
         castle = Castle(secret=_DEMO_SECRET)
 
