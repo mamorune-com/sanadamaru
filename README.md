@@ -39,7 +39,7 @@ The bait keys tell you one step more. If someone takes a key from a decoy file a
 
 | Defense | What happens |
 |---|---|
-| Decoy doors | 19 paths that scanners commonly probe (`/.env`, `/.git/config`, `/wp-login.php`, `*.sql`, `/actuator/env` and more) return plausible, entirely fake content. Every hit is recorded. |
+| Decoy doors | 26 paths that scanners commonly probe (`/.env`, `/.git/config`, `/wp-login.php`, `*.sql`, `/actuator/env` and more) return plausible, entirely fake content. Every hit is recorded. |
 | Marked bait keys | Each door contains fake keys, one per door and per field. If a bait key is presented later (in `Authorization`, `X-API-Key`, the query string and so on), the request is refused with 403 and you learn which kind of door (its marker) and which field it was taken from. Doors of the same kind share a marker, so a key from `/.env` and one from `/.env.production` look the same. |
 | Records and alerts | Only the time, door, marker, source address and the start of the user agent are kept, in memory, with hard caps. Alerts are limited to one per door (marker) per hour. |
 | Blocking (opt-in) | When enabled, a source that touched a door is refused for a while (24 hours by default). Health checks and emergency endpoints are never blocked. |
