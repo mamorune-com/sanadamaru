@@ -53,6 +53,17 @@ def test_door_path_variants():
         assert r is not None and r.status == 200, path
 
 
+def test_env_under_common_app_folders_is_a_door():
+    # 探りは /.env だけでなく、よくあるフォルダの下の .env も試す。どれも /.env と同じ目印（env）
+    c = make()
+    for path in ("/api/.env", "/app/.env", "/backend/.env", "/admin/.env", "/laravel/.env", "/.env.dev", "/.env.save"):
+        r = ask(c, path)
+        assert r is not None and r.status == 200, path
+        assert b"DB_PASSWORD=app_live_" in r.body
+    assert {e["marker"] for e in c.report()["recent"]} == {"env"}
+    assert ask(c, "/api/users") is None   # 本物の窓口は通す
+
+
 def test_every_default_door_answers_with_text_only():
     c = make()
     for path, _marker in c.doors:
