@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sanadamaru"
-version = "0.2.1"
+version = "0.3.0"
 description = "Tiny dependency-free honeypot for Python web apps (ASGI/WSGI): decoy paths and marked fake keys reveal who is probing. No hack-back."
 readme = "README.md"
 # ライセンスの写し（LICENSE・NOTICE）は、リポジトリのいちばん上のものを python/ に写して部品に入れる（CI が食い違いを落とす）
