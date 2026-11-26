@@ -1,0 +1,35 @@
+name: publish
+# Publishes the Python package to PyPI when a GitHub release is published (for example v0.3.0).
+# Uses PyPI trusted publishing: no password or token is stored anywhere.
+# One-time setup on pypi.org: add a "pending publisher" for project "sanadamaru",
+# owner mamorune-com, repository sanadamaru, workflow publish.yml, environment pypi.
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.13" }
+      - name: The release tag must match the package version
+        run: |
+          v=$(python -c "import re,pathlib; print(re.search(r'^version = \"([^\"]+)\"', pathlib.Path('python/pyproject.toml').read_text(), re.M).group(1))")
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} does not match version $v"; exit 1; }
+      - run: cmp LICENSE python/LICENSE && cmp NOTICE python/NOTICE
+      - run: pip install pytest build twine && cd python && python -m pytest -q && python -m build && twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: python/dist/ }
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1
