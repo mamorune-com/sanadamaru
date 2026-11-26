@@ -137,7 +137,7 @@ A maze costs the defender something too, and it has to stay inside the lines abo
 
 - It cannot see attacks that go straight for your real endpoints without probing a door. It does not replace authentication, authorization or input validation.
 - The decoy paths are well known. An attacker who knows about sanadamaru can avoid them. The bait keys, however, are unique to each installation.
-- Records and blocks live in memory only. They are lost on restart and are not shared between processes or servers.
+- By default, records and blocks live in memory only. They are lost on restart and are not shared between processes or servers. Pass a `store` to keep them elsewhere ([how-it-works](docs/en/how-it-works.md#keeping-records-and-blocks-outside-memory-store)).
 
 ## Documentation
 

@@ -11,7 +11,7 @@ It never touches the other side's systems. The lines it never crosses are in doc
 """
 from ._version import __version__
 from .asgi import SanadamaruMiddleware
-from .castle import FORBIDDEN, Castle, Reply, log_alert
+from .castle import FORBIDDEN, Castle, Reply, Store, log_alert
 from .doors import Door, default_doors
 from .wsgi import SanadamaruWSGI
 
@@ -22,6 +22,7 @@ __all__ = [
     "Reply",
     "SanadamaruMiddleware",
     "SanadamaruWSGI",
+    "Store",
     "__version__",
     "default_doors",
     "log_alert",
